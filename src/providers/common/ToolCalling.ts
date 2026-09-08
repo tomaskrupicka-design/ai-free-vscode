@@ -70,6 +70,7 @@ export function findToolCallMarkerStart(text: string): number {
   // literal above can match. No partial-tail form: the bare markers cover the
   // split-chunk case, and a lone `<` is far too common to hold on.
   take(INVOKE_MARKER_RE.exec(text)?.index ?? -1);
+  take(NS_PARTIAL_TAIL_RE.exec(text)?.index ?? -1);
   take(JSON_START_RE.exec(text)?.index ?? -1);
   take(ENVELOPE_START_RE.exec(text)?.index ?? -1);
   take(JSON_PARTIAL_TAIL_RE.exec(text)?.index ?? -1);
@@ -259,6 +260,9 @@ const PARSERS: Array<{
   { label: "tool_call attribute", parse: parseAttributeTagCalls },
   { label: "xml function", parse: parseXmlFunctionCalls },
   { label: "tool_name/tool_arguments", parse: parseTagPairCalls },
+  // Last of the XML dialects: it is the only one without a distinguishing
+  // attribute or `=`, so the more explicit ones get to claim the text first.
+  { label: "tool_call tag", parse: parseToolCallTagCalls },
   { label: "fenced", parse: parseCodeFenceCalls },
   { label: "bracket", parse: parseBracketCalls },
   { label: "plain", parse: parsePlainCalls },
@@ -594,23 +598,51 @@ function parseXmlFunctionCalls(text: string): AIStreamChunk[] {
 // DeepSeek falls back to this dialect no matter what the system prompt asks
 // for, so it is parsed rather than fought. Closing tags stay optional, as
 // everywhere else here — a block runs to the next tag or to the end.
-const NS = "(?:[\\w-]+:)?";
+// The wrapper tag around a batch of calls, in the two spellings seen so far.
+const WRAP = "(?:function_calls|tool_calls)";
+// Anything before the tag name, up to and including its delimiter. DeepSeek
+// prefixes the whole dialect with its own marker — `<｜｜DSML｜｜invoke …>`,
+// built from fullwidth bars rather than a colon — so the prefix cannot be
+// spelled as `\w+:`. Requiring a non-word character last keeps it from eating
+// into the tag name itself: `<myinvoke>` is not `<ns:invoke>`. `=` and quotes
+// are excluded so the prefix cannot swallow another dialect's syntax either —
+// without that, `<function=read_file>` parses as tag `read_file` in namespace
+// `function=` and loses every argument.
+const NS_CHAR = "[^\\s<>/=\"']";
+export const XML_NS_PREFIX = `(?:${NS_CHAR}{0,24}(?!\\w)${NS_CHAR})?`;
+const NS = XML_NS_PREFIX;
+// `[^>]*` after the name: models hang extra attributes off both tags, e.g.
+// `<parameter name="query" string="true">`.
 const INVOKE_RE = new RegExp(
-  `<${NS}invoke\\s+name\\s*=\\s*["']?([\\w.:-]+)["']?\\s*>([\\s\\S]*?)` +
-    `(?=</${NS}invoke>|<${NS}invoke\\b|</${NS}function_calls>|$)`,
+  `<${NS}invoke\\s+name\\s*=\\s*["']?([\\w.:-]+)["']?[^>]*>([\\s\\S]*?)` +
+    `(?=</${NS}invoke>|<${NS}invoke\\b|</${NS}${WRAP}>|$)`,
   "gi",
 );
 const XML_PARAMETER_ATTR_RE = new RegExp(
-  `<${NS}parameter\\s+name\\s*=\\s*["']?([\\w.:-]+)["']?\\s*>([\\s\\S]*?)` +
-    `(?=</${NS}parameter>|<${NS}parameter\\b|</${NS}invoke>|</${NS}function_calls>|$)`,
+  `<${NS}parameter\\s+name\\s*=\\s*["']?([\\w.:-]+)["']?[^>]*>([\\s\\S]*?)` +
+    `(?=</${NS}parameter>|<${NS}parameter\\b|</${NS}invoke>|</${NS}${WRAP}>|$)`,
   "gi",
 );
 /** A hold that is this dialect rather than prose that merely says "<invoke". */
 const INVOKE_PROTOCOL_RE = new RegExp(
-  `<${NS}function_calls>|<${NS}invoke\\s+name\\s*=`,
+  `<${NS}${WRAP}>|<${NS}invoke\\s+name\\s*=`,
   "i",
 );
-const INVOKE_MARKER_RE = new RegExp(`<${NS}(?:invoke|function_calls)\\b`, "i");
+const INVOKE_MARKER_RE = new RegExp(`<${NS}(?:invoke|${WRAP})\\b`, "i");
+/**
+ * Tail of a buffer that has opened a namespaced protocol tag but not yet
+ * reached its name (`<｜｜DSML｜｜too`, `<ns:inv`). The literal markers cover the
+ * bare spellings; this one exists because the prefix alone can be longer than
+ * the holdback, which used to leak `<｜｜DSML｜｜tool_calls>` into the chat.
+ *
+ * The delimiter is restricted to a bar or a non-ASCII character, so ordinary
+ * markup at a chunk boundary — `<div`, `<!--`, `<x-widget`, `<https:` — is not
+ * held. A plain `ns:` prefix needs no rule here: `<ns:invoke` is shorter than
+ * the holdback and is still whole when the marker scan reaches it.
+ */
+const NS_PARTIAL_TAIL_RE = new RegExp(
+  `<${NS_CHAR}{0,24}[|\\u0080-\\uffff]\\w{0,14}$`,
+);
 
 function parseInvokeTagCalls(text: string): AIStreamChunk[] {
   const calls: AIStreamChunk[] = [];
@@ -625,6 +657,39 @@ function parseInvokeTagCalls(text: string): AIStreamChunk[] {
       );
     }
   }
+  return calls;
+}
+
+// A third DeepSeek dialect, carrying no attributes at all — the tool name is a
+// tag of its own and so is every parameter:
+//   <tool_call> <read_file> <path>/a/b.ts</path> <startLine>720</startLine> </read_file>
+// Only the `<tool_call>` anchor separates this from ordinary XML in an answer,
+// so it is required; the attribute form `<tool_call name="…">` belongs to
+// `parseAttributeTagCalls` and is excluded here. Closing tags stay optional.
+const TOOL_CALL_TAG_RE = new RegExp(
+  `<${NS}tool_call\\s*>\\s*<${NS}([\\w.-]+)\\s*>([\\s\\S]*?)` +
+    `(?=</${NS}\\1\\s*>|<${NS}tool_call\\s*>|$)`,
+  "gi",
+);
+/** `<key>value</key>` pairs; a nested tag inside a value is left alone. */
+const SIMPLE_PARAM_RE = /<([\w.-]+)\s*>([\s\S]*?)<\/\1\s*>/g;
+
+function parseToolCallTagCalls(text: string): AIStreamChunk[] {
+  const calls: AIStreamChunk[] = [];
+
+  for (const match of text.matchAll(TOOL_CALL_TAG_RE)) {
+    const name = match[1]?.trim();
+    if (!name) continue;
+
+    const args: Record<string, unknown> = {};
+    for (const param of (match[2] ?? "").matchAll(SIMPLE_PARAM_RE)) {
+      const key = param[1]?.trim();
+      if (key) args[key] = coerceValue(param[2] ?? "", true);
+    }
+
+    calls.push(createToolCallChunk({ name, argumentsValue: args }));
+  }
+
   return calls;
 }
 
