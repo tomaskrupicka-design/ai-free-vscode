@@ -3,6 +3,7 @@ export const ROOMS = [
   { id: 'gamers', name: 'Gamers', emoji: '🎮', color: '#fbbf24' },
   { id: 'hudba', name: 'Hudba', emoji: '🎵', color: '#e5c100' },
   { id: 'random', name: 'Random', emoji: '🎲', color: '#c49a00' },
+  { id: 'nexus-ai', name: 'NEXUS AI', emoji: '🤖', color: '#fbbf24', ai: true },
 ]
 
 export const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥']
