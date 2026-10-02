@@ -1,0 +1,13 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "presence": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['uid', 'nickname', 'room', 'online', 'lastSeen']) && newData.child('uid').val() === auth.uid && newData.child('nickname').isString() && newData.child('room').isString() && newData.child('online').isBoolean()"
+      }
+    }
+  }
+}
