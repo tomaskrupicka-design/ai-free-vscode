@@ -23,6 +23,7 @@ import {
 import Login from './components/Login'
 import Sidebar from './components/Sidebar'
 import MessageBubble from './components/MessageBubble'
+import AiPanel from './components/AiPanel'
 import { auth, db, rtdb } from './firebase'
 import { MAX_MESSAGE_LENGTH, ROOMS } from './constants'
 
@@ -66,6 +67,12 @@ export default function App() {
   useEffect(() => {
     if (!user || !nickname) return undefined
 
+    if (room === 'nexus-ai') {
+      setMessages([])
+      setLoading(false)
+      return undefined
+    }
+
     setLoading(true)
     setChatError('')
 
@@ -97,6 +104,12 @@ export default function App() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    setReplyTo(null)
+    setPicker(null)
+    setChatError('')
+  }, [room])
 
   useEffect(() => {
     if (!user || !nickname) return undefined
@@ -278,13 +291,19 @@ export default function App() {
           <div className="header-copy">
             <strong style={{ color: currentRoom.color }}>#{currentRoom.name}</strong>
             <small>
-              {usersHere.length
-                ? `${usersHere.map((person) => person.nickname).join(', ')} zde`
-                : 'nikdo jiný tady není'}
+              {currentRoom.ai
+                ? 'Soukromý AI asistent'
+                : usersHere.length
+                  ? `${usersHere.map((person) => person.nickname).join(', ')} zde`
+                  : 'nikdo jiný tady není'}
             </small>
           </div>
         </header>
 
+        {currentRoom.ai ? (
+          <AiPanel />
+        ) : (
+          <>
         <div className="messages" onClick={() => setPicker(null)}>
           {loading && <div className="center-state">Načítám…</div>}
 
@@ -353,6 +372,8 @@ export default function App() {
             {sending ? '…' : '➤'}
           </button>
         </footer>
+          </>
+        )}
       </section>
     </div>
   )
