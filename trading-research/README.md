@@ -68,3 +68,37 @@ Výstup obsahuje pro každý trh:
 - počet změn pozice.
 
 Poznámka: projekt neobsahuje live exekuci, broker API ani páku.
+
+
+## Stažení reálných historických dat
+
+Research vrstva používá Yahoo Finance přes `yfinance` a symboly:
+
+- ES → `ES=F`
+- NQ → `NQ=F`
+- GC → `GC=F`
+- CL → `CL=F`
+
+Stažení 5 let denních dat:
+
+```bash
+python -m src.fetch_data
+```
+
+Soubory se uloží do:
+
+```text
+sample-data/ES.csv
+sample-data/NQ.csv
+sample-data/GC.csv
+sample-data/CL.csv
+```
+
+Potom spusť multi-market Radar:
+
+```bash
+python -m src.multimarket_demo
+```
+
+Tato data jsou určena pro historickou analýzu a backtest. Zdroj může být zpožděný a
+nepoužíváme jej pro live exekuci ani skutečné objednávky.
