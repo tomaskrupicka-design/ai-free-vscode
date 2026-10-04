@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 
 from .backtest import run_backtest
+from .regime import add_market_regime
+from .report import print_summary, summarize_backtest
 from .signals import add_trend_signal
 
 
@@ -18,13 +20,14 @@ def make_synthetic_data(rows: int = 600, seed: int = 7) -> pd.DataFrame:
 
 def main() -> None:
     data = make_synthetic_data()
+    data = add_market_regime(data, fast_window=20, slow_window=100, vol_window=20)
     data = add_trend_signal(data, fast_window=20, slow_window=100)
-    result = run_backtest(data)
+
+    tested, result = run_backtest(data)
+    summary = summarize_backtest(tested, result)
 
     print("Trading Research Agent v1 — synthetic demo")
-    print(f"Total return:      {result.total_return:.2%}")
-    print(f"Max drawdown:      {result.max_drawdown:.2%}")
-    print(f"Position changes:  {result.position_changes}")
+    print_summary(summary)
 
 
 if __name__ == "__main__":
