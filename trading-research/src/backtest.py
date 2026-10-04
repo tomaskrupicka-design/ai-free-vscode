@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
 import pandas as pd
 
 
@@ -14,11 +13,11 @@ class BacktestResult:
     equity_curve: pd.Series
 
 
-def run_backtest(frame: pd.DataFrame) -> BacktestResult:
+def run_backtest(frame: pd.DataFrame) -> tuple[pd.DataFrame, BacktestResult]:
     """Run a minimal close-to-close research backtest.
 
-    The signal is shifted by one bar to avoid using the same bar's close
-    to create and execute a hypothetical position.
+    The signal is shifted by one bar to reduce look-ahead bias.
+    No leverage, brokerage integration, or live execution is used.
     """
     required = {"close", "signal"}
     missing = required - set(frame.columns)
@@ -36,9 +35,10 @@ def run_backtest(frame: pd.DataFrame) -> BacktestResult:
 
     changes = int(data["position"].diff().fillna(0).ne(0).sum())
 
-    return BacktestResult(
+    result = BacktestResult(
         total_return=float(equity.iloc[-1] - 1.0),
         max_drawdown=float(drawdown.min()),
         position_changes=changes,
         equity_curve=equity,
     )
+    return data, result
