@@ -31,3 +31,40 @@ python -m src.demo
 ```
 
 > Tento modul je určen pouze pro výzkum a vzdělávání. Výsledky backtestu nejsou předpověď budoucích výsledků.
+
+
+## Multi-market Radar
+
+Připravené trhy:
+- ES
+- NQ
+- GC
+- CL
+
+Vlož historická CSV do `sample-data/` jako:
+- `ES.csv`
+- `NQ.csv`
+- `GC.csv`
+- `CL.csv`
+
+Každý soubor musí obsahovat alespoň:
+```csv
+date,close
+2025-01-02,100.25
+2025-01-03,101.10
+```
+
+Potom lze spustit:
+```bash
+python -m src.multimarket_demo
+```
+
+Výstup obsahuje pro každý trh:
+- poslední cenu,
+- Radar score,
+- LONG / SHORT / WAIT výzkumný signál,
+- hypotetický backtest výnos,
+- max drawdown,
+- počet změn pozice.
+
+Poznámka: projekt neobsahuje live exekuci, broker API ani páku.
