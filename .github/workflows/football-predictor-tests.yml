@@ -1,0 +1,25 @@
+name: Football predictor tests
+on:
+  push:
+    paths:
+      - "football_predictor/**"
+      - ".github/workflows/football-predictor-tests.yml"
+  pull_request:
+    paths:
+      - "football_predictor/**"
+  workflow_dispatch:
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r football_predictor/requirements.txt
+      - name: Check historical data importer and chronology
+        working-directory: football_predictor
+        run: python -m unittest discover -s tests -v
+      - name: Smoke test demo pipeline
+        working-directory: football_predictor
+        run: python main.py
