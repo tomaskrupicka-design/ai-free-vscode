@@ -56,9 +56,32 @@ if comparison_path.exists():
     st.subheader("Jednotlivé zápasy")
     st.caption("Očekávané góly jsou statistické odhady z výsledků, nikoliv skutečně naměřené xG.")
     st.dataframe(details, use_container_width=True, hide_index=True)
-    st.subheader("Klouzavý průměr chybovosti")
-    rolling = details[["brier", "log_loss"]].rolling(window=30, min_periods=1).mean()
-    st.line_chart(rolling)
+    from evaluation.monitoring import rolling_error, monthly_error, calibration
+    st.subheader("Časová osa chybovosti modelů")
+    window = st.selectbox("Klouzavé okno (zápasů na model)", [10, 30, 50, 100], index=1)
+    trend = rolling_error(frame, window=window)
+    st.caption("Křivky znázorňují zpětné testy; nižší hodnoty znamenají menší chybu.")
+    st.line_chart(trend.pivot(index="date", columns="model_version", values="rolling_brier"))
+    st.caption("Log-loss za stejné období:")
+    st.line_chart(trend.pivot(index="date", columns="model_version", values="rolling_log_loss"))
+
+    st.subheader("Chybovost po měsících")
+    month_table = monthly_error(frame)
+    st.dataframe(month_table.round(4), use_container_width=True, hide_index=True)
+
+    st.subheader("Kalibrace pravděpodobností")
+    labels = {"Domácí": "home", "Remíza": "draw", "Hosté": "away"}
+    outcome_label = st.selectbox("Vyhodnocovaný výsledek", list(labels))
+    calibration_data = calibration(frame, outcome=labels[outcome_label])
+    st.caption("Zobrazené intervaly mají aspoň 10 historických zápasů na model. "
+               "Malé vzorky nelze spolehlivě interpretovat.")
+    plotted = calibration_data[calibration_data["n"] >= 10]
+    if plotted.empty:
+        st.info("Pro kalibrační graf není ve vybraném filtru dost dat.")
+    else:
+        st.scatter_chart(plotted, x="predicted_probability",
+                         y="observed_frequency", color="model_version")
+    st.dataframe(calibration_data.round(4), use_container_width=True, hide_index=True)
     st.download_button("Export filtrovaných analýz (CSV)",
                        data=details.to_csv(index=False).encode("utf-8"),
                        file_name="football_radar_comparison.csv", mime="text/csv")
