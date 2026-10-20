@@ -2,6 +2,7 @@
 from models.elo import EloModel
 from models.poisson import result_probabilities
 from evaluation.metrics import brier, log_loss
+import pandas as pd
 
 def outcome(home_goals, away_goals):
     if home_goals > away_goals:
@@ -11,6 +12,8 @@ def outcome(home_goals, away_goals):
     return "away"
 
 def backtest(matches):
+    matches = matches.copy()
+    matches["date"] = pd.to_datetime(matches["date"], errors="raise").dt.normalize()
     elo = EloModel()
     rows = []
     # Historický zdroj poskytuje jen datum, nikoli ověřený okamžik zveřejnění.

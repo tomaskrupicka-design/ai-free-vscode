@@ -11,6 +11,8 @@
 
 ## Instalace
 
+Vyžaduje Python 3.11 nebo novější. Streamlit je připnutý na testovanou verzi 1.66.0.
+
 ```bash
 cd football_predictor
 python -m venv .venv
@@ -116,3 +118,45 @@ Služební/secret klíč nikdy nevkládej do veřejného frontend kódu ani GitH
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+## Spolehlivé běhy a ovládání filtrů
+
+```bash
+python main.py --real --fetch --compare --timeout 300
+python -m streamlit run dashboard_app.py
+```
+
+`--timeout` omezuje celý pracovní proces (stažení, modely a případný Supabase
+import), výchozí limit je 300 sekund. Při překročení se proces ukončí a CLI
+vrátí nenulový návratový kód. Nejde jen o timeout jednoho síťového požadavku.
+Počítané CSV vznikají v dočasném adresáři a zveřejní se až po úspěšném
+dokončení. Neúspěšný výpočet tedy nepřepíše předchozí reporty.
+Publikace jednotlivých CSV je atomická, celá sada ale není databázová transakce;
+dashboard upozorňuje na nedokončený běh. Stažený vstupní dataset se může změnit
+i při pozdějším selhání výpočtu.
+
+Stav se ukládá zvlášť pro skutečná a ukázková data do
+`output/run_status_real.json` a `output/run_status_demo.json`. Dashboard ukazuje
+poslední úspěšné dokončení v českém čase a upozorní na selhání, timeout nebo
+starší srovnání modelů. Tento čas není časem posledního zápasu ani potvrzením
+aktuálnosti OpenFootball. Staré výstupy bez záznamu nemají vymyšlené datum úspěchu.
+Filtry týmů a období se aplikují tlačítkem **Použít filtry** ve formuláři;
+samotná změna rozevírací nabídky nespouští nové filtrování.
+
+Zámek brání souběžným běhům této lokální pipeline v jednom výstupním adresáři.
+Při násilném ukončení řídicího procesu může stav zůstat `running`;
+další spuštění jej nahradí. Zámek nenahrazuje distribuovanou koordinaci.
+
+Supabase již používá upsert a unikátní klíče. Test `test_sync.py` simuluje
+opakovaný import i opakování po částečném zápisu; neprovádí síťové zápisy do
+produkce. Synchronizace více HTTP dávek není jedna transakce: přijaté dávky
+nelze timeoutem vrátit zpět. Bezpečný další krok je opakovat stejný import.
+Databázové schéma ani oprávnění se touto úpravou nemění.
+
+`test_dashboard.py` ověřuje ve Streamlit AppTest formuláře, filtr týmů, detail
+modelu, dostupnost exportu, chybějící data a upozornění po timeoutu.
+`test_runtime.py` kontroluje ukončení zaseknutého procesu, zachování starých
+výstupů a odmítnutí souběžného běhu. Nejde o test spuštění na uživatelově Kali.
+
+Pydantic AI a LangGraph zatím v tomto projektu nejsou závislosti. Současné
+výpočty jsou statistické modely; pro časový limit nepotřebují LLM ani API klíč.
