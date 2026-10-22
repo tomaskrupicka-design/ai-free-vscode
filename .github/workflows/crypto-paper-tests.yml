@@ -1,0 +1,27 @@
+name: Crypto Radar paper tests
+
+on:
+  pull_request:
+    paths:
+      - 'crypto_analyst/**'
+      - '.github/workflows/crypto-paper-tests.yml'
+  push:
+    branches:
+      - feature/crypto-analyzer-paper-trader
+    paths:
+      - 'crypto_analyst/**'
+      - '.github/workflows/crypto-paper-tests.yml'
+
+jobs:
+  simulation-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install -r crypto_analyst/requirements.txt
+      - name: Test analysis and simulation
+        working-directory: crypto_analyst
+        run: python -m unittest discover -s tests -v
