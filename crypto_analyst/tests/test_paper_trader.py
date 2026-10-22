@@ -35,7 +35,7 @@ class HistoricalSimulationTests(unittest.TestCase):
         altered.loc[len(altered) - 1, "close"] = 1.0  # Different same-bar close.
         a = simulate_ema_history(base)["events"]
         b = simulate_ema_history(altered)["events"]
-        self.assertEqual(a.to_dict("records"), b.to_dict("records"))
+        self.assertEqual(a.fillna(-1).to_dict("records"), b.fillna(-1).to_dict("records"))
 
     def test_costs_are_not_ignored(self):
         candles = demo_candles()
