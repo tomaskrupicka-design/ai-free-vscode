@@ -14,3 +14,17 @@ def fetch_klines(symbol="BTCUSDT", interval="1h", limit=KLINES_LIMIT):
         df[c]=pd.to_numeric(df[c],errors="coerce")
     df["open_time"]=pd.to_datetime(df["open_time"],unit="ms",utc=True)
     return df
+
+
+def closed_candles(frame, as_of=None):
+    """Keep only completed OHLC bars; the currently forming candle is excluded."""
+    if "close_time" not in frame.columns:
+        raise ValueError("V datech chybi close_time pro overeni dokonceni svicek.")
+    now = pd.Timestamp.now(tz="UTC") if as_of is None else pd.Timestamp(as_of)
+    if now.tzinfo is None:
+        now = now.tz_localize("UTC")
+    closing = pd.to_datetime(frame["close_time"], unit="ms", utc=True)
+    return (frame.loc[closing <= now]
+            .sort_values("open_time")
+            .drop_duplicates("open_time", keep="last")
+            .reset_index(drop=True))
