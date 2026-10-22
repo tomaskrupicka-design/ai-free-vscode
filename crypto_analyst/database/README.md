@@ -1,19 +1,23 @@
-# Crypto Radar V1 – databáze
+# Crypto Analyzer – Supabase databáze
 
-Tato složka připravuje **samostatnou** Supabase databázi pro veřejná historická krypto data a analytické výstupy.
+**Aktuální stav (22. 10. 2026):** Analytické tabulky byly vytvořeny v EXISTUJÍCÍM Supabase projektu `hollywood`, nikoli v novém projektu. Název projektu v administraci je stále `hollywood`.
 
-## Struktura
-- `crypto_candles`: časové řady OHLCV svíček
-- `crypto_analysis_reports`: uložené indikátory, režim trhu a komentář
-- `crypto_ingestion_runs`: protokol synchronizace dat
+## Tabulky
+- `public.crypto_candles`: historické OHLCV svíčky z veřejných tržních dat
+- `public.crypto_analysis_reports`: analytické reporty EMA, RSI, ATR, objem a tržní úrovně
+- `public.crypto_ingestion_runs`: volitelný protokol synchronizace
 
-## Nasazení
-1. Založ samostatný Supabase projekt po kontrole nákladů a dostupných projektových slotů.
-2. V SQL editoru **nového** projektu spusť `schema.sql`.
-3. Zkontroluj, že tabulky vznikly a RLS je povolené.
-4. Připoj datovou synchronizaci ze serveru a ukládej jen dokončené svíčky.
-5. Teprve potom zprovozni dashboard pro čtení výsledků.
+## První import
+- BTCUSDT: 239 dokončených hodinových spotových svíček
+- ETHUSDT: 239 dokončených hodinových spotových svíček
+- 2 jednorázové analytické reporty modelu `ema-rsi-atr-v0.1`
+- Zdroj: veřejná tržní data Binance Spot
+- **Nejde o automatické aktualizace.** Pro průběžný sběr je potřeba zavést a otestovat plánovanou synchronizaci.
 
-**Bezpečnost:** Neukládej secret/service-role key do repozitáře ani do veřejného Streamlit dashboardu. Schéma nemá žádné veřejné RLS politiky a nemá žádné právo otevírat obchody.
+## Zabezpečení
+Každá tabulka má zapnuté Row Level Security (RLS). Neexistují žádné obecně čitelné klientské politiky. Připojení pro zápis smějí používat jen důvěryhodné serverové komponenty s odpovídajícími právy.
 
-**Stav:** SQL soubor je připraven, ale není aplikován do žádné databáze. Účet aktuálně používá dvě aktivní databáze na tarifu Free.
+V souborech repozitáře nikdy neuchovávej secret ani service-role klíč. Analytický engine nepoužívá obchodní API a nemůže zadávat příkazy.
+
+## SQL
+`schema.sql` je původní idempotentní návrh struktury nasazené databáze; nepoužívej ho pro vytváření dalšího placeného projektu.
