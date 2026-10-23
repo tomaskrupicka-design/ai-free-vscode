@@ -9,3 +9,6 @@ dist/
 *.vsix
 .DS_Store
 test/live/.reports/
+**/.venv/
+**/__pycache__/
+football_predictor/output/

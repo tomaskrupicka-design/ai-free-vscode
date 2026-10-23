@@ -11,15 +11,18 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
       - run: pip install -r football_predictor/requirements.txt
       - name: Check historical data importer and chronology
         working-directory: football_predictor
         run: python -m unittest discover -s tests -v
       - name: Smoke test demo pipeline
         working-directory: football_predictor
-        run: python main.py
+        run: python main.py --compare --timeout 60
