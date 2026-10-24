@@ -116,3 +116,34 @@ Služební/secret klíč nikdy nevkládej do veřejného frontend kódu ani GitH
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+
+## Football Radar 2.1 — historický monitoring přesnosti
+
+V2.1 přidává do českého dashboardu:
+- časovou osu klouzavého Brier score a log-loss **pro všechny tři modely**,
+- srovnání chybovosti po měsících,
+- kalibraci historických pravděpodobností (odhad vs. skutečná četnost),
+- kontrolu, že vstupy obsahují jen retrospektivní backtesty,
+- jednotkové testy agregací a kalibrace.
+
+Grafy se počítají z `output/comparison_real.csv` vytvořeného příkazem
+`python main.py --real --compare`. Data modelů ani databázi Supabase
+tato změna neupravuje. Rozsah je **historická sportovní analytika**;
+nejsou tu budoucí rozpisy, automatické předzápasové predikce ani
+sázkové doporučování.
+
+### Spuštění
+
+```bash
+cd ~/ai-free-vscode/football_predictor
+source .venv/bin/activate
+python main.py --real --compare
+python -m unittest discover -s tests -v
+python -m streamlit run dashboard_app.py
+```
+
+Pro zobrazení V2.1 musí být soubory `monitoring.py` a aktualizovaný
+`dashboard_app.py` součástí lokálně stažené verze projektu.
+Při interpretaci kalibrace vždy sledujte počet zápasů v intervalu;
+malé vzorky vytvářejí nestabilní křivky.
