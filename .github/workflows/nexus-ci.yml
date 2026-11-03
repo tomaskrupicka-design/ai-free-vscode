@@ -25,6 +25,12 @@ jobs:
         with:
           node-version: 20
 
+      - name: Validate Firebase JSON configuration
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('nexus/firebase.json', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('nexus/database.rules.json', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('nexus/functions/package.json', 'utf8'))"
+
       - name: Install frontend
         working-directory: nexus
         run: npm install --no-audit --no-fund

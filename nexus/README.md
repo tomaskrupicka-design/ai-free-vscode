@@ -1,16 +1,6 @@
 # NEXUS secure foundation + AI
 
-Tahle verze převádí původní jednosouborový prototyp do Vite + React projektu a opravuje nejrizikovější části:
-
-- Firebase Anonymous Auth dává každému klientovi vlastní UID.
-- Přezdívka už není identita uživatele; je pouze zobrazované jméno.
-- Firestore ukládá zprávy a pravidla povolují autorovi mazání vlastních zpráv.
-- Reakce jsou uložené podle UID a pravidla dovolí uživateli měnit jen vlastní reakci.
-- Realtime Database řeší presence pomocí `onDisconnect()`, bez heartbeat zápisu každých 20 sekund.
-- Konfigurace je přes `.env`; žádný serverový tajný klíč nepatří do klienta.
-- Odeslání zprávy zachová text při chybě a má limit 2000 znaků.
-- Místnost **NEXUS AI** volá přihlášenou Firebase callable funkci.
-- `OPENAI_API_KEY` je Firebase Functions secret a nikdy nejde do Reactu ani Firestore.
+Tahle aplikace je samostatný frontend Vite + React ve složce `nexus/`.
 
 ## Spuštění frontendu
 
@@ -36,22 +26,41 @@ Do `.env` zkopíruj webovou Firebase konfiguraci projektu. Pro `VITE_FIREBASE_DA
 firebase functions:secrets:set OPENAI_API_KEY
 ```
 
-7. Nasadit pravidla a AI funkci:
+7. Nasadit pravidla a AI funkci až po samostatném schválení:
 
 ```bash
 firebase deploy --only firestore:rules,database,functions:nexusAi
 ```
 
-Cloud Function běží v regionu `europe-west1` a před voláním OpenAI kontroluje Firebase Authentication. Klient proto neposílá žádný OpenAI secret.
+Cloud Function běží v regionu `europe-west1`, vyžaduje Firebase Authentication a používá serverový secret. Má limit 10 požadavků za minutu a 80 požadavků denně na jedno Firebase UID.
 
 ## AI vrstva
 
-Frontend používá `httpsCallable(functions, 'nexusAi')`. Funkce přijme posledních 20 zpráv, každou omezí na 4000 znaků a volá OpenAI Responses API. Aktuální model je v `functions/index.js` nastavený na `gpt-6-luna`.
+Frontend používá `httpsCallable(functions, 'nexusAi')`. Funkce přijímá nejvýše 20 zpráv, nejvýše 4000 znaků na zprávu a 12000 znaků celkem. Výstup je omezen na 1200 tokenů. Požadavek používá `store: false`.
 
-## Bezpečnost
+`OPENAI_API_KEY` je Firebase Functions secret a nikdy nepatří do Reactu, `VITE_*` proměnných ani do veřejného repozitáře.
 
-Firebase web config (včetně webového `apiKey`) není serverové tajemství; skutečnou ochranu dat dělají Authentication + Security Rules. Tajné klíče jako `OPENAI_API_KEY` se nikdy nesmí dát do `VITE_*` proměnné, React kódu ani veřejného repozitáře.
+## Bezpečnostní hranice
 
-## Kontrola
+- Firebase web config není serverové tajemství; ochranu dat zajišťují Firebase Authentication a Security Rules.
+- Firestore pravidla omezují zprávy na známé místnosti, kontrolují povinná pole a typy, validují odpovědi a dovolují uživateli měnit pouze jeho vlastní reakci.
+- Realtimová presence data mají validaci UID, přezdívky, místnosti a datového typu.
+- AI funkce má serverové limity délky vstupu a rate limit podle Firebase UID.
 
-GitHub Actions workflow `NEXUS CI` instaluje frontend i Functions dependencies, sestaví produkční Vite build a kontroluje syntaxi Cloud Function.
+**Důležité:** Anonymous Authentication není ověření skutečné identity. Aktuální místnosti jsou sdílené pro všechny přihlášené návštěvníky a pravidla zatím nevyžadují členství v konkrétní místnosti. Aplikace proto není soukromým osobním chatem ani end-to-end šifrovaným messengerem. Neposílej přes ni důvěrné zprávy. Pro soukromé konverzace je nutné doplnit pozvánky/členství a samostatnou end-to-end šifrovací vrstvu.
+
+## Vercel
+
+Projekt používá Vite. Ve Vercelu je potřeba nastavit:
+
+- Framework Preset: Vite
+- Root Directory: `nexus`
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Node.js: 20.x
+
+Vercel environment variables musí obsahovat veřejnou Firebase web konfiguraci z `.env.example`. OpenAI secret zůstává pouze ve Firebase Functions Secret Manager.
+
+## Testy a nasazení
+
+GitHub Actions workflow `NEXUS CI` sestaví frontend, zkontroluje syntaxi Cloud Function a validitu JSON konfigurace. CI ani tento audit nenasazují Firebase nebo Vercel.
