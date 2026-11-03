@@ -15,47 +15,28 @@ Do `.env` zkopíruj webovou Firebase konfiguraci projektu. Pro `VITE_FIREBASE_DA
 
 ## Firebase nastavení
 
-1. Přihlášení používá Firebase Custom Authentication tokeny vytvořené serverově přes Firebase Admin SDK; není potřeba zapínat e-mailové ani anonymní přihlášení. Frontend nabízí pouze přezdívku a osobní přístupový kód; e-mail ani heslo se nezadávají.
-2. Nastav serverový secret s povolenými individuálními kódy. Hodnota secretu je JSON objekt, kde každý povolený kód má hodnotu true, například {"KOD-OSOBA-A-NAHODNY-32-ZNAKU":true,"KOD-OSOBA-B-NAHODNY-32-ZNAKU":true}. Kódy musí být náhodné a odlišné pro každého pozvaného uživatele:
-
-```bash
-firebase functions:secrets:set NEXUS_INVITE_CODES
-```
-
-Při výzvě vlož celý JSON objekt. Secret zůstává na serveru a není součástí frontendu.
+1. V Authentication → Sign-in method zapni **Email/Password**.
+2. V Authentication → Users vytvoř uživatelské účty předem. Veřejná registrace v aplikaci není dostupná. Každému uživateli předej jeho e-mail a heslo bezpečným způsobem.
 3. Firestore Database → Rules → nasadit obsah `firestore.rules`.
 4. Realtime Database → vytvořit databázi.
 5. Realtime Database → Rules → nasadit obsah `database.rules.json`.
-6. Nainstalovat Firebase CLI a přihlásit se k projektu.
-7. Nastavit OpenAI klíč jako Functions secret:
+6. Pro samotné přihlášení není potřeba Cloud Functions, Firebase Admin SDK, vlastní token ani placený tarif Blaze.
 
-```bash
-firebase functions:secrets:set OPENAI_API_KEY
-```
-
-8. Nasadit přihlašovací a AI funkce až po nastavení secretů:
-
-```bash
-firebase deploy --only functions:authorizeGuest,functions:nexusAi
-```
-
-Cloud Function běží v regionu `europe-west1`, vyžaduje Firebase Authentication a používá serverový secret. Má limit 10 požadavků za minutu a 80 požadavků denně na jedno Firebase UID.
+Přihlášení používá přímo Firebase Authentication `signInWithEmailAndPassword`. Přezdívka se uloží jako zobrazované jméno účtu. Aplikace nepovoluje veřejné vytváření účtů.
 
 ## AI vrstva
 
-Frontend používá `httpsCallable(functions, 'authorizeGuest')` pro přihlášení a `httpsCallable(functions, 'nexusAi')` pro AI. Funkce přijímá nejvýše 20 zpráv, nejvýše 4000 znaků na zprávu a 12000 znaků celkem. Výstup je omezen na 1200 tokenů. Požadavek používá `store: false`.
+Frontend používá `httpsCallable(functions, 'nexusAi')` pro AI. Funkce přijímá nejvýše 20 zpráv, nejvýše 4000 znaků na zprávu a 12000 znaků celkem. Výstup je omezen na 1200 tokenů. Požadavek používá `store: false`.
 
-`OPENAI_API_KEY` je Firebase Functions secret a nikdy nepatří do Reactu, `VITE_*` proměnných ani do veřejného repozitáře.
+`OPENAI_API_KEY` je Firebase Functions secret a nikdy nepatří do Reactu, `VITE_*` proměnných ani do veřejného repozitáře. **NEXUS AI nadále používá Cloud Functions, které vyžadují tarif podporující Functions.** Změna přihlašování tento požadavek pro AI neodstraňuje.
 
 ## Bezpečnostní hranice
 
 - Firebase web config není serverové tajemství; ochranu dat zajišťují Firebase Authentication a Security Rules.
-- Vstup je přes přezdívku a individuální pozvánkový kód. Server ověří kód uložený ve Firebase Secret Manageru, omezí pokusy podle IP a vytvoří vlastní Firebase UID přes custom token. Přístupové kódy nejsou součástí klientského kódu.
+- Přístup mají pouze předem vytvořené účty Firebase Authentication; aplikace nemá veřejnou registraci.
 - Firestore pravidla omezují zprávy na známé místnosti, kontrolují povinná pole a typy, validují odpovědi a dovolují uživateli měnit pouze jeho vlastní reakci.
-- Realtimová presence data mají validaci UID, přezdívky, místnosti a datového typu.
-- AI funkce má serverové limity délky vstupu a rate limit podle Firebase UID.
-
-**Důležité:** Anonymous Authentication není ověření skutečné identity. Aktuální místnosti jsou sdílené pro všechny přihlášené návštěvníky a pravidla zatím nevyžadují členství v konkrétní místnosti. Aplikace proto není soukromým osobním chatem ani end-to-end šifrovaným messengerem. Neposílej přes ni důvěrné zprávy. Pro soukromé konverzace je nutné doplnit pozvánky/členství a samostatnou end-to-end šifrovací vrstvu.
+- Realtime presence data mají validaci UID, přezdívky, místnosti a datového typu.
+- Aktuální místnosti jsou sdílené pro všechny přihlášené účty a pravidla zatím nevyžadují členství v konkrétní místnosti. Aplikace proto zatím není soukromým osobním chatem ani end-to-end šifrovaným messengerem. Neposílej přes ni důvěrné zprávy. Pro soukromé konverzace je nutné doplnit členství a samostatnou end-to-end šifrovací vrstvu.
 
 ## Vercel
 
