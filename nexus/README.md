@@ -32,13 +32,13 @@ firebase functions:secrets:set OPENAI_API_KEY
 firebase deploy --only firestore:rules,database,functions:nexusAi
 ```
 
-Cloud Function běží v regionu `europe-west1`, vyžaduje Firebase Authentication a používá serverový secret. Má limit 10 požadavků za minutu a 80 požadavků denně na jedno Firebase UID.
+Cloud Function běží v regionu `europe-west1` na Node.js 22, vyžaduje Firebase Authentication a používá serverový secret. Má limit 10 požadavků za minutu a 80 požadavků denně na jedno Firebase UID.
 
 ## AI vrstva
 
 Frontend používá `httpsCallable(functions, 'nexusAi')`. Funkce přijímá nejvýše 20 zpráv, nejvýše 4000 znaků na zprávu a 12000 znaků celkem. Výstup je omezen na 1200 tokenů. Požadavek používá `store: false`.
 
-`OPENAI_API_KEY` je Firebase Functions secret a nikdy nepatří do Reactu, `VITE_*` proměnných ani do veřejného repozitáře.
+`OPENAI_API_KEY` je Firebase Functions secret a nikdy nepatří do Reactu, `VITE_*` proměnných ani do veřejného repozitáře. Texty konverzace z panelu NEXUS AI se posílají do OpenAI Responses API; `store: false` je nastaveno v požadavku, ale uživatel by i tak neměl zadávat hesla ani citlivé osobní údaje.
 
 ## Bezpečnostní hranice
 
@@ -63,4 +63,4 @@ Vercel environment variables musí obsahovat veřejnou Firebase web konfiguraci 
 
 ## Testy a nasazení
 
-GitHub Actions workflow `NEXUS CI` sestaví frontend, zkontroluje syntaxi Cloud Function a validitu JSON konfigurace. CI ani tento audit nenasazují Firebase nebo Vercel.
+GitHub Actions workflow `NEXUS CI` sestaví frontend na Node.js 22, provede audit produkčních npm závislostí, zkontroluje syntaxi Cloud Function a validitu JSON konfigurace. Firebase Functions používají přesně připnuté verze `firebase-admin` 14.5.0 a `firebase-functions` 7.4.0. CI ani tento audit nenasazují Firebase nebo Vercel.
