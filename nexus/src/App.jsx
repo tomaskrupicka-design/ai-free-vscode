@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth'
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from 'firebase/auth'
 import {
   addDoc,
   collection,
@@ -26,8 +32,6 @@ import MessageBubble from './components/MessageBubble'
 import AiPanel from './components/AiPanel'
 import { auth, db, rtdb } from './firebase'
 import { MAX_MESSAGE_LENGTH, ROOMS } from './constants'
-
-const NICK_KEY = 'nexus:nickname'
 
 export default function App() {
   const [authReady, setAuthReady] = useState(false)
@@ -58,8 +62,7 @@ export default function App() {
   useEffect(() => {
     return onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser)
-      const savedNick = localStorage.getItem(NICK_KEY)
-      setNickname(nextUser && savedNick ? savedNick : null)
+      setNickname(nextUser?.displayName || null)
       setAuthReady(true)
     })
   }, [])
@@ -160,30 +163,53 @@ export default function App() {
     })
   }, [user])
 
-  const handleGuestEntry = async (nick) => {
-    const clean = nick.trim().slice(0, 20)
-    if (clean.length < 2) return
-
+  const handleAuthentication = async ({ mode, email, password, nickname: requestedNickname }) => {
     setAuthBusy(true)
     setAuthError('')
 
     try {
-      localStorage.setItem(NICK_KEY, clean)
-      const nextUser = auth.currentUser ?? (await signInAnonymously(auth)).user
-      setUser(nextUser)
-      setNickname(clean)
+      const normalizedEmail = email.trim().toLowerCase()
+      let nextUser
+
+      if (mode === 'register') {
+        const cleanNickname = requestedNickname.trim().slice(0, 20)
+        const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password)
+        nextUser = credential.user
+        await updateProfile(nextUser, { displayName: cleanNickname })
+      } else {
+        const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password)
+        nextUser = credential.user
+        if (!nextUser.displayName) {
+          await updateProfile(nextUser, { displayName: normalizedEmail.split('@')[0].slice(0, 20) || 'Uživatel' })
+        }
+      }
+
+      await nextUser.reload()
+      setUser(auth.currentUser)
+      setNickname(auth.currentUser.displayName)
     } catch (error) {
-      console.error(error)
-      localStorage.removeItem(NICK_KEY)
-      setAuthError('Vstup hosta se nepodařil. Zkontroluj, že je ve Firebase zapnuté anonymní přihlášení.')
+      console.error('Authentication error:', error)
+      const messages = {
+        'auth/email-already-in-use': 'Tento e-mail už má účet. Přihlas se.',
+        'auth/invalid-email': 'Zadej platnou e-mailovou adresu.',
+        'auth/weak-password': 'Heslo musí mít alespoň 6 znaků.',
+        'auth/invalid-credential': 'E-mail nebo heslo nejsou správné.',
+        'auth/user-not-found': 'Účet s tímto e-mailem neexistuje.',
+        'auth/wrong-password': 'Nesprávné heslo.',
+        'auth/too-many-requests': 'Příliš mnoho pokusů. Zkus to později.',
+        'auth/network-request-failed': 'Nepodařilo se připojit k síti.',
+        'auth/operation-not-allowed': 'Přihlášení e-mailem a heslem není ve Firebase povolené.',
+      }
+      setAuthError(messages[error.code] || 'Přihlášení se nepodařilo. Zkontroluj údaje a zkus to znovu.')
     } finally {
       setAuthBusy(false)
     }
   }
 
-  const handleChangeNickname = async () => {
-    if (user) {
-      try {
+  const handleSignOut = async () => {
+    setAuthBusy(true)
+    try {
+      if (user) {
         await set(ref(rtdb, `presence/${user.uid}`), {
           uid: user.uid,
           nickname: nickname || 'uživatel',
@@ -191,13 +217,17 @@ export default function App() {
           online: false,
           lastSeen: databaseTimestamp(),
         })
-      } catch (error) {
-        console.error(error)
       }
+      await signOut(auth)
+      setUser(null)
+      setNickname(null)
+      setMessages([])
+    } catch (error) {
+      console.error('Sign out error:', error)
+      setAuthError('Odhlášení se nepodařilo. Zkus to znovu.')
+    } finally {
+      setAuthBusy(false)
     }
-
-    localStorage.removeItem(NICK_KEY)
-    setNickname(null)
   }
 
   const send = async () => {
@@ -264,7 +294,7 @@ export default function App() {
   }
 
   if (!user || !nickname) {
-    return <Login onContinue={handleGuestEntry} busy={authBusy} error={authError} />
+    return <Login onAuthenticate={handleAuthentication} busy={authBusy} error={authError} />
   }
 
   const usersHere = online.filter(
@@ -279,7 +309,7 @@ export default function App() {
           room={room}
           onRoomChange={setRoom}
           nickname={nickname}
-          onChangeNickname={handleChangeNickname}
+          onSignOut={handleSignOut}
         />
       )}
 
@@ -303,74 +333,71 @@ export default function App() {
           <AiPanel />
         ) : (
           <>
-        <div className="messages" onClick={() => setPicker(null)}>
-          {loading && <div className="center-state">Načítám…</div>}
-
-          {!loading && messages.length === 0 && (
-            <div className="empty-state">
-              <div>{currentRoom.emoji}</div>
-              <p>Zatím nic. Začni konverzaci!</p>
+            <div className="messages" onClick={() => setPicker(null)}>
+              {loading && <div className="center-state">Načítám…</div>}
+              {!loading && messages.length === 0 && (
+                <div className="empty-state">
+                  <div>{currentRoom.emoji}</div>
+                  <p>Zatím nic. Začni konverzaci!</p>
+                </div>
+              )}
+              {messages.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  msg={message}
+                  currentUid={user.uid}
+                  roomColor={currentRoom.color}
+                  pickerOpen={picker === message.id}
+                  onTogglePicker={(messageId) => {
+                    setPicker((current) => (current === messageId ? null : messageId))
+                  }}
+                  onReply={(selected) => {
+                    setReplyTo(selected)
+                    inputRef.current?.focus()
+                  }}
+                  onReact={toggleReaction}
+                />
+              ))}
+              <div ref={bottomRef} />
             </div>
-          )}
 
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              msg={message}
-              currentUid={user.uid}
-              roomColor={currentRoom.color}
-              pickerOpen={picker === message.id}
-              onTogglePicker={(messageId) => {
-                setPicker((current) => (current === messageId ? null : messageId))
-              }}
-              onReply={(selected) => {
-                setReplyTo(selected)
-                inputRef.current?.focus()
-              }}
-              onReact={toggleReaction}
-            />
-          ))}
+            {replyTo && (
+              <div className="reply-bar">
+                <div>
+                  <strong>↩ {replyTo.nickname}</strong>
+                  <span>{replyTo.text.slice(0, 100)}{replyTo.text.length > 100 ? '…' : ''}</span>
+                </div>
+                <button onClick={() => setReplyTo(null)}>✕</button>
+              </div>
+            )}
 
-          <div ref={bottomRef} />
-        </div>
+            {chatError && <div className="chat-error">{chatError}</div>}
 
-        {replyTo && (
-          <div className="reply-bar">
-            <div>
-              <strong>↩ {replyTo.nickname}</strong>
-              <span>{replyTo.text.slice(0, 100)}{replyTo.text.length > 100 ? '…' : ''}</span>
-            </div>
-            <button onClick={() => setReplyTo(null)}>✕</button>
-          </div>
-        )}
-
-        {chatError && <div className="chat-error">{chatError}</div>}
-
-        <footer className="composer">
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                send()
-              }
-            }}
-            maxLength={MAX_MESSAGE_LENGTH}
-            placeholder={replyTo ? `Odpovědět ${replyTo.nickname}…` : `Napsat do #${currentRoom.name}…`}
-            aria-label="Zpráva"
-          />
-          <span className="character-count">{input.length}/{MAX_MESSAGE_LENGTH}</span>
-          <button
-            className="send-button"
-            onClick={send}
-            disabled={!input.trim() || sending}
-            aria-label="Odeslat"
-          >
-            {sending ? '…' : '➤'}
-          </button>
-        </footer>
+            <footer className="composer">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault()
+                    send()
+                  }
+                }}
+                maxLength={MAX_MESSAGE_LENGTH}
+                placeholder={replyTo ? `Odpovědět ${replyTo.nickname}…` : `Napsat do #${currentRoom.name}…`}
+                aria-label="Zpráva"
+              />
+              <span className="character-count">{input.length}/{MAX_MESSAGE_LENGTH}</span>
+              <button
+                className="send-button"
+                onClick={send}
+                disabled={!input.trim() || sending}
+                aria-label="Odeslat"
+              >
+                {sending ? '…' : '➤'}
+              </button>
+            </footer>
           </>
         )}
       </section>
