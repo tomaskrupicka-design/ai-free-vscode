@@ -8,6 +8,7 @@ on:
   push:
     branches:
       - nexus-secure-foundation
+      - "fix/**"
     paths:
       - "nexus/**"
       - ".github/workflows/nexus-ci.yml"
