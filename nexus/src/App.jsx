@@ -31,9 +31,9 @@ import Sidebar from './components/Sidebar'
 import MessageBubble from './components/MessageBubble'
 import AiPanel from './components/AiPanel'
 import { auth, db, rtdb, functions } from './firebase'
+import { MAX_MESSAGE_LENGTH, ROOMS } from './constants'
 
 const authorizeGuest = httpsCallable(functions, 'authorizeGuest')
-import { MAX_MESSAGE_LENGTH, ROOMS } from './constants'
 
 export default function App() {
   const [authReady, setAuthReady] = useState(false)
