@@ -292,7 +292,7 @@ export default function App() {
             <strong style={{ color: currentRoom.color }}>#{currentRoom.name}</strong>
             <small>
               {currentRoom.ai
-                ? 'Soukromý AI asistent'
+                ? 'AI asistent · zpracování přes OpenAI'
                 : usersHere.length
                   ? `${usersHere.map((person) => person.nickname).join(', ')} zde`
                   : 'nikdo jiný tady není'}
