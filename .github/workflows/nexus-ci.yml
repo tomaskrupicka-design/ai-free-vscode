@@ -46,3 +46,7 @@ jobs:
       - name: Check function syntax
         working-directory: nexus/functions
         run: node --check index.js
+
+      - name: Check Vercel API syntax
+        working-directory: nexus
+        run: node --check api/authorize-guest.js
