@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
-  signInWithEmailAndPassword,
+  signInWithCustomToken,
   signOut,
   updateProfile,
 } from 'firebase/auth'
+import { httpsCallable } from 'firebase/functions'
 import {
   addDoc,
   collection,
@@ -30,7 +30,9 @@ import Login from './components/Login'
 import Sidebar from './components/Sidebar'
 import MessageBubble from './components/MessageBubble'
 import AiPanel from './components/AiPanel'
-import { auth, db, rtdb } from './firebase'
+import { auth, db, rtdb, functions } from './firebase'
+
+const authorizeGuest = httpsCallable(functions, 'authorizeGuest')
 import { MAX_MESSAGE_LENGTH, ROOMS } from './constants'
 
 export default function App() {
@@ -163,44 +165,31 @@ export default function App() {
     })
   }, [user])
 
-  const handleAuthentication = async ({ mode, email, password, nickname: requestedNickname }) => {
+  const handleAuthentication = async ({ nickname: requestedNickname, accessCode }) => {
     setAuthBusy(true)
     setAuthError('')
 
     try {
-      const normalizedEmail = email.trim().toLowerCase()
-      let nextUser
-
-      if (mode === 'register') {
-        const cleanNickname = requestedNickname.trim().slice(0, 20)
-        const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password)
-        nextUser = credential.user
-        await updateProfile(nextUser, { displayName: cleanNickname })
-      } else {
-        const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password)
-        nextUser = credential.user
-        if (!nextUser.displayName) {
-          await updateProfile(nextUser, { displayName: normalizedEmail.split('@')[0].slice(0, 20) || 'Uživatel' })
-        }
-      }
-
-      await nextUser.reload()
+      const cleanNickname = requestedNickname.trim().slice(0, 20)
+      const response = await authorizeGuest({
+        nickname: cleanNickname,
+        accessCode: accessCode.trim(),
+      })
+      const credential = await signInWithCustomToken(auth, response.data.token)
+      await updateProfile(credential.user, { displayName: cleanNickname })
+      await credential.user.reload()
       setUser(auth.currentUser)
-      setNickname(auth.currentUser.displayName)
+      setNickname(cleanNickname)
     } catch (error) {
-      console.error('Authentication error:', error)
+      console.error('Guest authentication error:', error)
       const messages = {
-        'auth/email-already-in-use': 'Tento e-mail už má účet. Přihlas se.',
-        'auth/invalid-email': 'Zadej platnou e-mailovou adresu.',
-        'auth/weak-password': 'Heslo musí mít alespoň 6 znaků.',
-        'auth/invalid-credential': 'E-mail nebo heslo nejsou správné.',
-        'auth/user-not-found': 'Účet s tímto e-mailem neexistuje.',
-        'auth/wrong-password': 'Nesprávné heslo.',
-        'auth/too-many-requests': 'Příliš mnoho pokusů. Zkus to později.',
+        'functions/unauthenticated': 'Přístupový kód není platný.',
+        'functions/resource-exhausted': 'Příliš mnoho pokusů. Zkus to za chvíli.',
+        'functions/invalid-argument': 'Zkontroluj přezdívku a přístupový kód.',
+        'functions/unavailable': 'Ověření je momentálně nedostupné. Zkus to později.',
         'auth/network-request-failed': 'Nepodařilo se připojit k síti.',
-        'auth/operation-not-allowed': 'Přihlášení e-mailem a heslem není ve Firebase povolené.',
       }
-      setAuthError(messages[error.code] || 'Přihlášení se nepodařilo. Zkontroluj údaje a zkus to znovu.')
+      setAuthError(messages[error.code] || 'Přihlášení se nepodařilo. Zkontroluj přístupový kód.')
     } finally {
       setAuthBusy(false)
     }
