@@ -23,7 +23,7 @@ jobs:
       - name: Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Validate Firebase JSON configuration
         run: |
@@ -35,6 +35,10 @@ jobs:
         working-directory: nexus
         run: npm install --no-audit --no-fund
 
+      - name: Audit frontend dependencies
+        working-directory: nexus
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Build frontend
         working-directory: nexus
         run: npm run build
@@ -42,6 +46,10 @@ jobs:
       - name: Install functions
         working-directory: nexus/functions
         run: npm install --no-audit --no-fund
+
+      - name: Audit Functions dependencies
+        working-directory: nexus/functions
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Check function syntax
         working-directory: nexus/functions
