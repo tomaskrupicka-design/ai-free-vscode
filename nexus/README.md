@@ -1,55 +1,37 @@
 # NEXUS secure foundation + AI
 
-Tahle aplikace je samostatný frontend Vite + React ve složce `nexus/`.
+Aplikace je Vite + React frontend ve složce `nexus/`.
 
-## Spuštění frontendu
+## Přihlášení bez e-mailu
+
+Přihlášení zachovává přezdívku a osobní pozvánkový kód. Ověření probíhá na serverové Vercel API route `/api/authorize-guest`; kódy nejsou součástí klientského JavaScriptu.
+
+Ve Vercelu nastav v projektu (Root Directory: `nexus`) tyto serverové Environment Variables pro Production i Preview:
+
+- `NEXUS_INVITE_CODES`: JSON objekt povolených kódů, např. `{"SEM_PATRI_TVŮJ_NAHODNÝ_KÓD":true}`. Použij vlastní dlouhý náhodný kód a nikomu ho neposílej.
+- `FIREBASE_SERVICE_ACCOUNT_JSON`: celý JSON service-account klíče Firebase projektu `nexus-chat-cc27e`. Jde o citlivý serverový klíč: nevkládej jej do chatu, repozitáře ani do proměnných začínajících `VITE_`.
+
+Service account musí mít oprávnění vytvářet Firebase Authentication custom tokeny a zapisovat do Firestore pro rate limiting. Po uložení proměnných je nutné vytvořit nový Vercel deployment, aby se proměnné načetly.
+
+API omezuje pokusy na 10 za 10 minut podle IP adresy. Přihlášení používá Firebase Custom Authentication; ve Firebase Authentication musí být povoleno Anonymous sign-in? Ne — custom token sign-in používá Firebase Authentication custom token flow a nevyžaduje e-mail/heslo poskytovatele.
+
+## Firebase
+
+- Firestore Database → Rules: nasadit `firestore.rules`.
+- Realtime Database → Rules: nasadit `database.rules.json`.
+- Firebase web config patří do Vercel `VITE_*` proměnných podle `.env.example`.
+
+## NEXUS AI
+
+NEXUS AI stále volá Firebase Cloud Function `nexusAi` a používá secret `OPENAI_API_KEY`. Tato AI funkce vyžaduje tarif Firebase, který podporuje Cloud Functions. Přihlášení přes Vercel API však placenou Firebase Cloud Function nepotřebuje.
+
+## Bezpečnostní omezení
+
+Místnosti jsou nyní sdílené pro všechny přihlášené uživatele. Aplikace zatím není end-to-end šifrovaný soukromý messenger. Neposílej přes ni citlivé zprávy, dokud nebude doplněno členství a E2E šifrování.
+
+## Build
 
 ```bash
-cd nexus
-cp .env.example .env
 npm install
-npm run dev
+npm run build
 ```
-
-Do `.env` zkopíruj webovou Firebase konfiguraci projektu. Pro `VITE_FIREBASE_DATABASE_URL` použij přesnou URL Realtime Database z Firebase Console.
-
-## Firebase nastavení
-
-1. V Authentication → Sign-in method zapni **Email/Password**.
-2. V Authentication → Users vytvoř uživatelské účty předem. Veřejná registrace v aplikaci není dostupná. Každému uživateli předej jeho e-mail a heslo bezpečným způsobem.
-3. Firestore Database → Rules → nasadit obsah `firestore.rules`.
-4. Realtime Database → vytvořit databázi.
-5. Realtime Database → Rules → nasadit obsah `database.rules.json`.
-6. Pro samotné přihlášení není potřeba Cloud Functions, Firebase Admin SDK, vlastní token ani placený tarif Blaze.
-
-Přihlášení používá přímo Firebase Authentication `signInWithEmailAndPassword`. Přezdívka se uloží jako zobrazované jméno účtu. Aplikace nepovoluje veřejné vytváření účtů.
-
-## AI vrstva
-
-Frontend používá `httpsCallable(functions, 'nexusAi')` pro AI. Funkce přijímá nejvýše 20 zpráv, nejvýše 4000 znaků na zprávu a 12000 znaků celkem. Výstup je omezen na 1200 tokenů. Požadavek používá `store: false`.
-
-`OPENAI_API_KEY` je Firebase Functions secret a nikdy nepatří do Reactu, `VITE_*` proměnných ani do veřejného repozitáře. **NEXUS AI nadále používá Cloud Functions, které vyžadují tarif podporující Functions.** Změna přihlašování tento požadavek pro AI neodstraňuje.
-
-## Bezpečnostní hranice
-
-- Firebase web config není serverové tajemství; ochranu dat zajišťují Firebase Authentication a Security Rules.
-- Přístup mají pouze předem vytvořené účty Firebase Authentication; aplikace nemá veřejnou registraci.
-- Firestore pravidla omezují zprávy na známé místnosti, kontrolují povinná pole a typy, validují odpovědi a dovolují uživateli měnit pouze jeho vlastní reakci.
-- Realtime presence data mají validaci UID, přezdívky, místnosti a datového typu.
-- Aktuální místnosti jsou sdílené pro všechny přihlášené účty a pravidla zatím nevyžadují členství v konkrétní místnosti. Aplikace proto zatím není soukromým osobním chatem ani end-to-end šifrovaným messengerem. Neposílej přes ni důvěrné zprávy. Pro soukromé konverzace je nutné doplnit členství a samostatnou end-to-end šifrovací vrstvu.
-
-## Vercel
-
-Projekt používá Vite. Ve Vercelu je potřeba nastavit:
-
-- Framework Preset: Vite
-- Root Directory: `nexus`
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- Node.js: 20.x
-
-Vercel environment variables musí obsahovat veřejnou Firebase web konfiguraci z `.env.example`. OpenAI secret zůstává pouze ve Firebase Functions Secret Manager.
-
-## Testy a nasazení
-
-GitHub Actions workflow `NEXUS CI` sestaví frontend, zkontroluje syntaxi Cloud Function a validitu JSON konfigurace. CI ani tento audit nenasazují Firebase nebo Vercel.
