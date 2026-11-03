@@ -15,7 +15,14 @@ Do `.env` zkopíruj webovou Firebase konfiguraci projektu. Pro `VITE_FIREBASE_DA
 
 ## Firebase nastavení
 
-1. Authentication → Sign-in method → zapnout **Anonymous**. Návštěvník se nemusí registrovat e-mailem ani zadávat heslo: na úvodní obrazovce si zvolí přezdívku a aplikace na pozadí vytvoří anonymní Firebase UID pro bezpečný přístup k chatu.
+1. Firebase Authentication musí mít povolené **Custom tokens** (Firebase Admin SDK je vytváří serverově). Frontend nabízí pouze přezdívku a osobní přístupový kód; e-mail ani heslo se nezadávají.
+2. Nastav serverový secret s povolenými individuálními kódy. Hodnota secretu je JSON objekt, kde každý povolený kód má hodnotu true, například {"KOD-OSOBA-A-NAHODNY-32-ZNAKU":true,"KOD-OSOBA-B-NAHODNY-32-ZNAKU":true}. Kódy musí být náhodné a odlišné pro každého pozvaného uživatele:
+
+```bash
+firebase functions:secrets:set NEXUS_INVITE_CODES
+```
+
+Při výzvě vlož celý JSON objekt. Secret zůstává na serveru a není součástí frontendu.
 2. Firestore Database → Rules → nasadit obsah `firestore.rules`.
 3. Realtime Database → vytvořit databázi.
 4. Realtime Database → Rules → nasadit obsah `database.rules.json`.
@@ -29,21 +36,21 @@ firebase functions:secrets:set OPENAI_API_KEY
 7. Nasadit pravidla a AI funkci až po samostatném schválení:
 
 ```bash
-firebase deploy --only firestore:rules,database,functions:nexusAi
+firebase deploy --only functions:authorizeGuest,functions:nexusAi
 ```
 
 Cloud Function běží v regionu `europe-west1`, vyžaduje Firebase Authentication a používá serverový secret. Má limit 10 požadavků za minutu a 80 požadavků denně na jedno Firebase UID.
 
 ## AI vrstva
 
-Frontend používá `httpsCallable(functions, 'nexusAi')`. Funkce přijímá nejvýše 20 zpráv, nejvýše 4000 znaků na zprávu a 12000 znaků celkem. Výstup je omezen na 1200 tokenů. Požadavek používá `store: false`.
+Frontend používá `httpsCallable(functions, 'authorizeGuest')` pro přihlášení a `httpsCallable(functions, 'nexusAi')` pro AI. Funkce přijímá nejvýše 20 zpráv, nejvýše 4000 znaků na zprávu a 12000 znaků celkem. Výstup je omezen na 1200 tokenů. Požadavek používá `store: false`.
 
 `OPENAI_API_KEY` je Firebase Functions secret a nikdy nepatří do Reactu, `VITE_*` proměnných ani do veřejného repozitáře.
 
 ## Bezpečnostní hranice
 
 - Firebase web config není serverové tajemství; ochranu dat zajišťují Firebase Authentication a Security Rules.
-- Vstup do chatu je pro hosty přes přezdívku bez e-mailu a hesla. Anonymní Firebase UID je technická vrstva potřebná pro pravidla přístupu; tlačítko v profilu pouze změní přezdívku a hostovskou relaci neodhlašuje.
+- Vstup je přes přezdívku a individuální pozvánkový kód. Server ověří kód uložený ve Firebase Secret Manageru, omezí pokusy podle IP a vytvoří vlastní Firebase UID přes custom token. Přístupové kódy nejsou součástí klientského kódu.
 - Firestore pravidla omezují zprávy na známé místnosti, kontrolují povinná pole a typy, validují odpovědi a dovolují uživateli měnit pouze jeho vlastní reakci.
 - Realtimová presence data mají validaci UID, přezdívky, místnosti a datového typu.
 - AI funkce má serverové limity délky vstupu a rate limit podle Firebase UID.
