@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { onAuthStateChanged, signInAnonymously } from 'firebase/auth'
+import { onAuthStateChanged, signOut, updateProfile } from 'firebase/auth'
 import {
   addDoc,
   collection,
@@ -26,8 +26,6 @@ import MessageBubble from './components/MessageBubble'
 import AiPanel from './components/AiPanel'
 import { auth, db, rtdb } from './firebase'
 import { MAX_MESSAGE_LENGTH, ROOMS } from './constants'
-
-const NICK_KEY = 'nexus:nickname'
 
 export default function App() {
   const [authReady, setAuthReady] = useState(false)
@@ -58,8 +56,7 @@ export default function App() {
   useEffect(() => {
     return onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser)
-      const savedNick = localStorage.getItem(NICK_KEY)
-      setNickname(nextUser && savedNick ? savedNick : null)
+      setNickname(nextUser?.displayName || null)
       setAuthReady(true)
     })
   }, [])
@@ -160,30 +157,45 @@ export default function App() {
     })
   }, [user])
 
-  const handleGuestEntry = async (nick) => {
-    const clean = nick.trim().slice(0, 20)
-    if (clean.length < 2) return
-
+  const handleAuth = async ({ mode, nickname: requestedNickname, email, password }) => {
     setAuthBusy(true)
     setAuthError('')
 
     try {
-      localStorage.setItem(NICK_KEY, clean)
-      const nextUser = auth.currentUser ?? (await signInAnonymously(auth)).user
-      setUser(nextUser)
-      setNickname(clean)
+      if (mode === 'register') {
+        const credential = await createUserWithEmailAndPassword(auth, email, password)
+        await updateProfile(credential.user, { displayName: requestedNickname.trim().slice(0, 20) })
+        setUser(credential.user)
+        setNickname(credential.user.displayName)
+      } else {
+        const credential = await signInWithEmailAndPassword(auth, email, password)
+        if (!credential.user.displayName) {
+          await signOut(auth)
+          throw new Error('Účet nemá nastavenou přezdívku. Kontaktuj podporu.')
+        }
+        setUser(credential.user)
+        setNickname(credential.user.displayName)
+      }
     } catch (error) {
       console.error(error)
-      localStorage.removeItem(NICK_KEY)
-      setAuthError('Vstup hosta se nepodařil. Zkontroluj, že je ve Firebase zapnuté anonymní přihlášení.')
+      const messages = {
+        'auth/email-already-in-use': 'Tento e-mail už má účet. Přihlas se.',
+        'auth/invalid-email': 'E-mail nemá správný formát.',
+        'auth/weak-password': 'Heslo musí mít alespoň 6 znaků.',
+        'auth/invalid-credential': 'Nesprávný e-mail nebo heslo.',
+        'auth/user-disabled': 'Tento účet je deaktivovaný.',
+        'auth/too-many-requests': 'Příliš mnoho pokusů. Zkus to později.',
+        'auth/operation-not-allowed': 'E-mailové přihlášení není ve Firebase povolené.',
+      }
+      setAuthError(messages[error.code] || error.message || 'Přihlášení se nepodařilo.')
     } finally {
       setAuthBusy(false)
     }
   }
 
-  const handleChangeNickname = async () => {
-    if (user) {
-      try {
+  const handleLogout = async () => {
+    try {
+      if (user) {
         await set(ref(rtdb, `presence/${user.uid}`), {
           uid: user.uid,
           nickname: nickname || 'uživatel',
@@ -191,13 +203,14 @@ export default function App() {
           online: false,
           lastSeen: databaseTimestamp(),
         })
-      } catch (error) {
-        console.error(error)
       }
+      await signOut(auth)
+      setNickname(null)
+      setUser(null)
+    } catch (error) {
+      console.error(error)
+      setAuthError('Odhlášení se nepodařilo.')
     }
-
-    localStorage.removeItem(NICK_KEY)
-    setNickname(null)
   }
 
   const send = async () => {
@@ -264,7 +277,7 @@ export default function App() {
   }
 
   if (!user || !nickname) {
-    return <Login onContinue={handleGuestEntry} busy={authBusy} error={authError} />
+    return <Login onSubmit={handleAuth} busy={authBusy} error={authError} />
   }
 
   const usersHere = online.filter(
@@ -279,7 +292,7 @@ export default function App() {
           room={room}
           onRoomChange={setRoom}
           nickname={nickname}
-          onChangeNickname={handleChangeNickname}
+          onLogout={handleLogout}
         />
       )}
 
