@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   onAuthStateChanged,
-  signInWithCustomToken,
+  signInWithEmailAndPassword,
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { httpsCallable } from 'firebase/functions'
 import {
   addDoc,
   collection,
@@ -30,10 +29,8 @@ import Login from './components/Login'
 import Sidebar from './components/Sidebar'
 import MessageBubble from './components/MessageBubble'
 import AiPanel from './components/AiPanel'
-import { auth, db, rtdb, functions } from './firebase'
+import { auth, db, rtdb } from './firebase'
 import { MAX_MESSAGE_LENGTH, ROOMS } from './constants'
-
-const authorizeGuest = httpsCallable(functions, 'authorizeGuest')
 
 export default function App() {
   const [authReady, setAuthReady] = useState(false)
@@ -171,25 +168,28 @@ export default function App() {
 
     try {
       const cleanNickname = requestedNickname.trim().slice(0, 20)
-      const response = await authorizeGuest({
-        nickname: cleanNickname,
-        accessCode: accessCode.trim(),
-      })
-      const credential = await signInWithCustomToken(auth, response.data.token)
-      await updateProfile(credential.user, { displayName: cleanNickname })
+      const credential = await signInWithEmailAndPassword(
+        auth,
+        accessCode.email.trim().toLowerCase(),
+        accessCode.password,
+      )
+      if (credential.user.displayName !== cleanNickname) {
+        await updateProfile(credential.user, { displayName: cleanNickname })
+      }
       await credential.user.reload()
       setUser(auth.currentUser)
       setNickname(cleanNickname)
     } catch (error) {
       console.error('Guest authentication error:', error)
       const messages = {
-        'functions/unauthenticated': 'Přístupový kód není platný.',
-        'functions/resource-exhausted': 'Příliš mnoho pokusů. Zkus to za chvíli.',
-        'functions/invalid-argument': 'Zkontroluj přezdívku a přístupový kód.',
-        'functions/unavailable': 'Ověření je momentálně nedostupné. Zkus to později.',
+        'auth/invalid-credential': 'E-mail nebo heslo nejsou správné.',
+        'auth/user-not-found': 'Tento účet neexistuje.',
+        'auth/wrong-password': 'E-mail nebo heslo nejsou správné.',
+        'auth/too-many-requests': 'Příliš mnoho pokusů. Zkus to později.',
+        'auth/operation-not-allowed': 'Přihlášení e-mailem a heslem není ve Firebase zapnuté.',
         'auth/network-request-failed': 'Nepodařilo se připojit k síti.',
       }
-      setAuthError(messages[error.code] || 'Přihlášení se nepodařilo. Zkontroluj přístupový kód.')
+      setAuthError(messages[error.code] || 'Přihlášení se nepodařilo. Zkontroluj údaje a zkus to znovu.')
     } finally {
       setAuthBusy(false)
     }
