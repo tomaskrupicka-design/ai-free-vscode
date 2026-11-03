@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth'
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth'
 import {
   addDoc,
   collection,
@@ -160,7 +160,7 @@ export default function App() {
     })
   }, [user])
 
-  const handleLogin = async (nick) => {
+  const handleGuestEntry = async (nick) => {
     const clean = nick.trim().slice(0, 20)
     if (clean.length < 2) return
 
@@ -175,13 +175,13 @@ export default function App() {
     } catch (error) {
       console.error(error)
       localStorage.removeItem(NICK_KEY)
-      setAuthError('Přihlášení se nepodařilo. Zkontroluj, že je ve Firebase zapnuté Anonymous Authentication.')
+      setAuthError('Vstup hosta se nepodařil. Zkontroluj, že je ve Firebase zapnuté anonymní přihlášení.')
     } finally {
       setAuthBusy(false)
     }
   }
 
-  const handleLogout = async () => {
+  const handleChangeNickname = async () => {
     if (user) {
       try {
         await set(ref(rtdb, `presence/${user.uid}`), {
@@ -198,7 +198,6 @@ export default function App() {
 
     localStorage.removeItem(NICK_KEY)
     setNickname(null)
-    await signOut(auth)
   }
 
   const send = async () => {
@@ -265,7 +264,7 @@ export default function App() {
   }
 
   if (!user || !nickname) {
-    return <Login onLogin={handleLogin} busy={authBusy} error={authError} />
+    return <Login onContinue={handleGuestEntry} busy={authBusy} error={authError} />
   }
 
   const usersHere = online.filter(
@@ -280,7 +279,7 @@ export default function App() {
           room={room}
           onRoomChange={setRoom}
           nickname={nickname}
-          onLogout={handleLogout}
+          onChangeNickname={handleChangeNickname}
         />
       )}
 
