@@ -1,6 +1,6 @@
 import { ROOMS } from '../constants'
 
-export default function Sidebar({ online, room, onRoomChange, nickname, onChangeNickname }) {
+export default function Sidebar({ online, room, onRoomChange, nickname, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-top">
@@ -48,7 +48,7 @@ export default function Sidebar({ online, room, onRoomChange, nickname, onChange
           <strong>{nickname}</strong>
           <small>● Online</small>
         </div>
-        <button className="ghost-button" onClick={onChangeNickname} title="Změnit přezdívku">✎</button>
+        <button className="ghost-button" onClick={onLogout} title="Odhlásit se">↪</button>
       </div>
     </aside>
   )
