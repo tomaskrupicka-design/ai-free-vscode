@@ -15,7 +15,7 @@ Do `.env` zkopíruj webovou Firebase konfiguraci projektu. Pro `VITE_FIREBASE_DA
 
 ## Firebase nastavení
 
-1. Authentication → Sign-in method → zapnout **Anonymous**. Návštěvník se nemusí registrovat e-mailem ani zadávat heslo: na úvodní obrazovce si zvolí přezdívku a aplikace na pozadí vytvoří anonymní Firebase UID pro bezpečný přístup k chatu.
+1. Authentication → Sign-in method → zapnout **Email/Password**. Registrace vyžaduje přezdívku, e-mail a heslo (nejméně 6 znaků); další přihlášení probíhá e-mailem a heslem. Anonymní přihlašování se nepoužívá.
 2. Firestore Database → Rules → nasadit obsah `firestore.rules`.
 3. Realtime Database → vytvořit databázi.
 4. Realtime Database → Rules → nasadit obsah `database.rules.json`.
@@ -43,12 +43,12 @@ Frontend používá `httpsCallable(functions, 'nexusAi')`. Funkce přijímá nej
 ## Bezpečnostní hranice
 
 - Firebase web config není serverové tajemství; ochranu dat zajišťují Firebase Authentication a Security Rules.
-- Vstup do chatu je pro hosty přes přezdívku bez e-mailu a hesla. Anonymní Firebase UID je technická vrstva potřebná pro pravidla přístupu; tlačítko v profilu pouze změní přezdívku a hostovskou relaci neodhlašuje.
+- Přístup do chatu vyžaduje Firebase účet ověřený e-mailem a heslem. Přezdívka je uložena v profilu Firebase Authentication.
 - Firestore pravidla omezují zprávy na známé místnosti, kontrolují povinná pole a typy, validují odpovědi a dovolují uživateli měnit pouze jeho vlastní reakci.
 - Realtimová presence data mají validaci UID, přezdívky, místnosti a datového typu.
 - AI funkce má serverové limity délky vstupu a rate limit podle Firebase UID.
 
-**Důležité:** Anonymous Authentication není ověření skutečné identity. Aktuální místnosti jsou sdílené pro všechny přihlášené návštěvníky a pravidla zatím nevyžadují členství v konkrétní místnosti. Aplikace proto není soukromým osobním chatem ani end-to-end šifrovaným messengerem. Neposílej přes ni důvěrné zprávy. Pro soukromé konverzace je nutné doplnit pozvánky/členství a samostatnou end-to-end šifrovací vrstvu.
+**Důležité:** E-mailové přihlášení ověřuje přístup k účtu, ale samo o sobě neznamená end-to-end šifrování. Aktuální místnosti jsou sdílené pro všechny přihlášené uživatele a pravidla zatím nevyžadují členství v konkrétní místnosti. Aplikace proto zatím není soukromým osobním messengerem. Pro soukromé konverzace je nutné doplnit pozvánky/členství a samostatnou end-to-end šifrovací vrstvu.
 
 ## Vercel
 
