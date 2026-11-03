@@ -57,6 +57,7 @@ export default function AiPanel() {
 
   return (
     <div className="ai-shell">
+      <p className="muted ai-privacy-note">Zprávy v tomto panelu se odesílají službě OpenAI kvůli vytvoření odpovědi. Nezadávej sem hesla ani citlivé osobní údaje.</p>
       <div className="ai-messages">
         {messages.map((message, index) => (
           <div
