@@ -15,7 +15,7 @@ Do `.env` zkopíruj webovou Firebase konfiguraci projektu. Pro `VITE_FIREBASE_DA
 
 ## Firebase nastavení
 
-1. Firebase Authentication musí mít povolené **Custom tokens** (Firebase Admin SDK je vytváří serverově). Frontend nabízí pouze přezdívku a osobní přístupový kód; e-mail ani heslo se nezadávají.
+1. Přihlášení používá Firebase Custom Authentication tokeny vytvořené serverově přes Firebase Admin SDK; není potřeba zapínat e-mailové ani anonymní přihlášení. Frontend nabízí pouze přezdívku a osobní přístupový kód; e-mail ani heslo se nezadávají.
 2. Nastav serverový secret s povolenými individuálními kódy. Hodnota secretu je JSON objekt, kde každý povolený kód má hodnotu true, například {"KOD-OSOBA-A-NAHODNY-32-ZNAKU":true,"KOD-OSOBA-B-NAHODNY-32-ZNAKU":true}. Kódy musí být náhodné a odlišné pro každého pozvaného uživatele:
 
 ```bash
@@ -23,17 +23,17 @@ firebase functions:secrets:set NEXUS_INVITE_CODES
 ```
 
 Při výzvě vlož celý JSON objekt. Secret zůstává na serveru a není součástí frontendu.
-2. Firestore Database → Rules → nasadit obsah `firestore.rules`.
-3. Realtime Database → vytvořit databázi.
-4. Realtime Database → Rules → nasadit obsah `database.rules.json`.
-5. Nainstalovat Firebase CLI a přihlásit se k projektu.
-6. Nastavit OpenAI klíč jako Functions secret:
+3. Firestore Database → Rules → nasadit obsah `firestore.rules`.
+4. Realtime Database → vytvořit databázi.
+5. Realtime Database → Rules → nasadit obsah `database.rules.json`.
+6. Nainstalovat Firebase CLI a přihlásit se k projektu.
+7. Nastavit OpenAI klíč jako Functions secret:
 
 ```bash
 firebase functions:secrets:set OPENAI_API_KEY
 ```
 
-7. Nasadit pravidla a AI funkci až po samostatném schválení:
+8. Nasadit přihlašovací a AI funkce až po nastavení secretů:
 
 ```bash
 firebase deploy --only functions:authorizeGuest,functions:nexusAi
