@@ -1,5 +1,4 @@
 const admin = require('firebase-admin')
-const crypto = require('node:crypto')
 const { onCall, HttpsError } = require('firebase-functions/v2/https')
 const { defineSecret } = require('firebase-functions/params')
 
@@ -9,76 +8,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore()
 const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY')
-const NEXUS_INVITE_CODES = defineSecret('NEXUS_INVITE_CODES')
 
-exports.authorizeGuest = onCall(
-  {
-    region: 'europe-west1',
-    secrets: [NEXUS_INVITE_CODES],
-    timeoutSeconds: 15,
-    memory: '256MiB',
-  },
-  async (request) => {
-    const nickname = typeof request.data?.nickname === 'string'
-      ? request.data.nickname.trim()
-      : ''
-    const accessCode = typeof request.data?.accessCode === 'string'
-      ? request.data.accessCode.trim()
-      : ''
-
-    if (nickname.length < 2 || nickname.length > 20 || accessCode.length < 8 || accessCode.length > 128) {
-      throw new HttpsError('invalid-argument', 'Přezdívka nebo přístupový kód nemají platný formát.')
-    }
-
-    const ip = request.rawRequest.ip || 'unknown'
-    const ipKey = crypto.createHash('sha256').update(ip).digest('hex')
-    const attemptRef = db.collection('_nexusGuestAccessAttempts').doc(ipKey)
-    const now = Date.now()
-    await db.runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(attemptRef)
-      const state = snapshot.exists ? snapshot.data() : {}
-      const windowStart = Number(state.windowStart || 0)
-      const attempts = now - windowStart < 10 * 60 * 1000
-        ? Number(state.attempts || 0)
-        : 0
-
-      if (attempts >= 10) {
-        throw new HttpsError('resource-exhausted', 'Příliš mnoho pokusů. Zkus to za chvíli.')
-      }
-
-      transaction.set(attemptRef, {
-        windowStart: attempts ? windowStart : now,
-        attempts: attempts + 1,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-    })
-
-    let allowedCodes
-    try {
-      allowedCodes = JSON.parse(NEXUS_INVITE_CODES.value())
-    } catch {
-      console.error('NEXUS_INVITE_CODES secret must contain a JSON object.')
-      throw new HttpsError('failed-precondition', 'Přístupové kódy nejsou na serveru nastavené.')
-    }
-
-    if (
-      !allowedCodes
-      || typeof allowedCodes !== 'object'
-      || Array.isArray(allowedCodes)
-      || allowedCodes[accessCode] !== true
-    ) {
-      throw new HttpsError('unauthenticated', 'Přístupový kód není platný.')
-    }
-
-    const uid = `guest_${crypto.randomUUID().replace(/-/g, '')}`
-    const token = await admin.auth().createCustomToken(uid, {
-      guest: true,
-      nickname,
-    })
-
-    return { token }
-  },
-)
 const MODEL = 'gpt-6-luna'
 const MAX_MESSAGES = 20
 const MAX_MESSAGE_CHARS = 4000
