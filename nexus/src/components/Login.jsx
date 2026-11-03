@@ -1,73 +1,57 @@
 import { useState } from 'react'
 
 export default function Login({ onAuthenticate, busy, error }) {
-  const [mode, setMode] = useState('login')
   const [nickname, setNickname] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [accessCode, setAccessCode] = useState('')
 
   const cleanNickname = nickname.trim()
-  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-  const validPassword = password.length >= 6
-  const validNickname = cleanNickname.length >= 2 && cleanNickname.length <= 20
-  const valid = validEmail && validPassword && (mode === 'login' || validNickname)
+  const cleanCode = accessCode.trim()
+  const valid = cleanNickname.length >= 2
+    && cleanNickname.length <= 20
+    && cleanCode.length >= 8
+    && cleanCode.length <= 128
 
   const submit = (event) => {
     event.preventDefault()
-    if (valid && !busy) onAuthenticate({ mode, email, password, nickname })
+    if (valid && !busy) onAuthenticate({ nickname: cleanNickname, accessCode: cleanCode })
   }
 
   return (
     <main className="login-shell">
       <form className="login-card" onSubmit={submit}>
         <div className="logo-bolt">⚡</div>
-        <h1 className="logo-title">Vítej v NEXUS</h1>
-        <p className="muted">{mode === 'register' ? 'Vytvoř si vlastní účet' : 'Přihlas se ke svému účtu'}</p>
-
-        {mode === 'register' && (
-          <input
-            value={nickname}
-            onChange={(event) => setNickname(event.target.value)}
-            placeholder="Přezdívka (2–20 znaků)"
-            maxLength={20}
-            autoComplete="nickname"
-            aria-label="Přezdívka"
-          />
-        )}
+        <h1 className="logo-title">Vítej v NEXTER</h1>
+        <p className="muted">Vstup pomocí pozvánky</p>
 
         <input
-          type="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="E-mail"
-          autoComplete="email"
-          aria-label="E-mail"
+          value={nickname}
+          onChange={(event) => setNickname(event.target.value)}
+          placeholder="Tvoje přezdívka"
+          maxLength={20}
+          autoComplete="nickname"
+          aria-label="Přezdívka"
           required
         />
 
         <input
           type="password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Heslo (min. 6 znaků)"
-          autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-          aria-label="Heslo"
-          minLength={6}
+          value={accessCode}
+          onChange={(event) => setAccessCode(event.target.value)}
+          placeholder="Osobní přístupový kód"
+          autoComplete="one-time-code"
+          aria-label="Přístupový kód"
+          minLength={8}
+          maxLength={128}
           required
         />
 
         {error && <p className="error-text">{error}</p>}
 
         <button className="primary-button" type="submit" disabled={!valid || busy}>
-          {busy ? 'Pracuji…' : mode === 'register' ? 'Vytvořit účet →' : 'Přihlásit se →'}
+          {busy ? 'Ověřuji přístup…' : 'Vstoupit do NEXTER →'}
         </button>
 
-        <p className="login-note">
-          {mode === 'register' ? 'Už máš účet?' : 'Ještě nemáš účet?'}{' '}
-          <button className="text-button" type="button" onClick={() => setMode(mode === 'register' ? 'login' : 'register')}>
-            {mode === 'register' ? 'Přihlásit se' : 'Vytvořit účet'}
-          </button>
-        </p>
+        <p className="login-note">Přístup je možný pouze s platným pozvánkovým kódem.</p>
       </form>
     </main>
   )
