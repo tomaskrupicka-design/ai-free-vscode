@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   onAuthStateChanged,
-  signInWithEmailAndPassword,
+  signInWithCustomToken,
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import {
-  addDoc,
+import { addDoc,
   collection,
   deleteField,
   doc,
@@ -168,28 +167,28 @@ export default function App() {
 
     try {
       const cleanNickname = requestedNickname.trim().slice(0, 20)
-      const credential = await signInWithEmailAndPassword(
-        auth,
-        accessCode.email.trim().toLowerCase(),
-        accessCode.password,
-      )
-      if (credential.user.displayName !== cleanNickname) {
-        await updateProfile(credential.user, { displayName: cleanNickname })
+      const response = await fetch('/api/authorize-guest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname: cleanNickname, accessCode: accessCode.trim() }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || typeof result.token !== 'string') {
+        const error = new Error(result.error || 'Ověření přístupu se nepodařilo.')
+        error.status = response.status
+        throw error
       }
+      const credential = await signInWithCustomToken(auth, result.token)
+      await updateProfile(credential.user, { displayName: cleanNickname })
       await credential.user.reload()
       setUser(auth.currentUser)
       setNickname(cleanNickname)
     } catch (error) {
       console.error('Guest authentication error:', error)
       const messages = {
-        'auth/invalid-credential': 'E-mail nebo heslo nejsou správné.',
-        'auth/user-not-found': 'Tento účet neexistuje.',
-        'auth/wrong-password': 'E-mail nebo heslo nejsou správné.',
-        'auth/too-many-requests': 'Příliš mnoho pokusů. Zkus to později.',
-        'auth/operation-not-allowed': 'Přihlášení e-mailem a heslem není ve Firebase zapnuté.',
         'auth/network-request-failed': 'Nepodařilo se připojit k síti.',
       }
-      setAuthError(messages[error.code] || 'Přihlášení se nepodařilo. Zkontroluj údaje a zkus to znovu.')
+      setAuthError(error.status === 429 ? 'Příliš mnoho pokusů. Zkus to za chvíli.' : messages[error.code] || error.message || 'Přihlášení se nepodařilo. Zkontroluj přístupový kód.')
     } finally {
       setAuthBusy(false)
     }
